@@ -100,13 +100,9 @@ if (!token) window.location.href = '/index.html';
 
 // === CONFIGURACIÓN DE PERFIL (CLIENTE/EMPLEADO) ===
 if (usuario.rol !== 'admin') {
-    // 1. Ocultar botón de Inventario
     const btnInventario = document.querySelector('a[href="/dashboard.html"]');
     if (btnInventario) btnInventario.style.display = 'none';
 
-    // 2. (Opcional) Si no quieres que cierren caja, oculta el botón de Corte
-    // const btnCorte = document.getElementById('btnCorte');
-    // if (btnCorte) btnCorte.style.display = 'none';
 }
     let inventario = [], carrito = [], cajaAbierta = false;
 
@@ -119,13 +115,11 @@ if (usuario.rol !== 'admin') {
         renderizarProductos(inventario);
     }
 
-    // FIX: Renderizado adaptado a columnas de Bootstrap
     function renderizarProductos(lista) {
         const container = document.getElementById('listaProductos');
         container.innerHTML = '';
         lista.forEach(prod => {
             if(prod.stock_actual > 0) {
-                // Creamos columnas col-6 (celular) col-lg-3 (PC)
                 container.innerHTML += `
                     <div class="col-6 col-md-4 col-lg-3">
                         <div class="product-card p-3 text-center" onclick="agregarAlCarrito(${prod.id})">
