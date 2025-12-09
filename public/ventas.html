@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS - Modelorama</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        body { height: 100vh; overflow: hidden; background: #e9ecef; }
+        .main-container { height: calc(100vh - 60px); }
+        .products-area { overflow-y: auto; height: 100%; padding: 20px; }
+        .product-card { 
+            cursor: pointer; transition: 0.2s; border: none; 
+            background: white; border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            height: 100%;
+        }
+        .product-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(13,110,253,0.2); border: 1px solid #0d6efd; }
+        .price-badge { background: #0d6efd; color: white; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+        .btn-quick { border-radius: 20px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1); white-space: nowrap; }
+        .cart-area { background: white; height: 100%; display: flex; flex-direction: column; border-left: 1px solid #dee2e6; box-shadow: -5px 0 15px rgba(0,0,0,0.05); }
+        .cart-list { flex: 1; overflow-y: auto; padding: 15px; }
+        .cart-item { border-bottom: 1px dashed #dee2e6; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+        .cart-total { background: #f8f9fa; padding: 20px; border-top: 2px solid #dee2e6; }
+        /* Modal simple */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-receipt { background: white; padding: 20px; width: 350px; font-family: 'Courier New', monospace; text-align: center; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark px-3 h-60px">
+    <a class="navbar-brand" href="#"><i class="bi bi-shop-window"></i> Caja</a>
+    <div class="d-flex align-items-center gap-3">
+        <span id="estadoCajaBadge" class="badge bg-secondary">Verificando...</span>
+        <button id="btnCorte" onclick="gestionarCaja()" class="btn btn-outline-light btn-sm">Caja</button>
+        <a href="/dashboard.html" class="btn btn-primary btn-sm">Inventario</a>
+        <button onclick="logout()" class="btn btn-danger btn-sm"><i class="bi bi-power"></i></button>
+    </div>
+</nav>
+
+<div class="row g-0 main-container">
+    <div class="col-md-8 products-area">
+        <div class="d-flex gap-2 mb-3 overflow-auto pb-2">
+            <button class="btn btn-warning btn-quick text-dark" onclick="agregarEnvase('ENV-001')">Imp. Mega</button>
+            <button class="btn btn-warning btn-quick text-dark" onclick="agregarEnvase('ENV-002')">Imp. Media</button>
+            <button class="btn btn-warning btn-quick text-dark" onclick="agregarEnvase('ENV-003')">Imp. Cuartito</button>
+        </div>
+
+        <div class="input-group mb-4 shadow-sm">
+            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+            <input type="text" id="buscador" class="form-control border-start-0" placeholder="Escanear o buscar..." onkeyup="filtrarProductos()">
+        </div>
+
+        <div id="listaProductos" class="row g-3"></div>
+    </div>
+
+    <div class="col-md-4 cart-area">
+        <div class="p-3 bg-light border-bottom"><h5 class="m-0"><i class="bi bi-receipt"></i> Ticket Actual</h5></div>
+        <div id="listaCarrito" class="cart-list">
+            <div class="text-center text-muted mt-5"><i class="bi bi-cart-x" style="font-size: 2rem;"></i><p>Carrito vacío</p></div>
+        </div>
+        <div class="cart-total">
+            <div class="d-flex justify-content-between mb-2">
+                <span class="fs-5">Total:</span><span class="fs-4 fw-bold text-success">$<span id="totalVenta">0.00</span></span>
+            </div>
+            <div class="d-grid gap-2">
+                <button class="btn btn-success btn-lg" onclick="cobrar()">COBRAR </button>
+                <button class="btn btn-outline-danger" onclick="limpiarCarrito()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modalTicket" class="modal-overlay">
+    <div class="modal-receipt">
+        <h4>MODELORAMA</h4>
+        <p>Ticket #<span id="ticketId"></span></p>
+        <p id="fechaTicket" class="small"></p>
+        <hr>
+        <div id="ticketItems" class="text-start"></div>
+        <hr>
+        <h3 class="text-end">Total: $<span id="ticketTotal"></span></h3>
+        <p class="mt-3">¡Gracias por su compra!</p>
+        <div class="d-flex gap-2 justify-content-center mt-3 no-print">
+            <button class="btn btn-primary btn-sm" onclick="window.print()">Imprimir</button>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('modalTicket').style.display='none'">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const token = localStorage.getItem('token');
+// Recuperamos datos del usuario (Rol y Nombre)
+const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+
+if (!token) window.location.href = '/index.html';
+
+// === CONFIGURACIÓN DE PERFIL (CLIENTE/EMPLEADO) ===
+if (usuario.rol !== 'admin') {
+    // 1. Ocultar botón de Inventario
+    const btnInventario = document.querySelector('a[href="/dashboard.html"]');
+    if (btnInventario) btnInventario.style.display = 'none';
+
+    // 2. (Opcional) Si no quieres que cierren caja, oculta el botón de Corte
+    // const btnCorte = document.getElementById('btnCorte');
+    // if (btnCorte) btnCorte.style.display = 'none';
+}
+    let inventario = [], carrito = [], cajaAbierta = false;
+
+    cargarProductos();
+    verificarCaja();
+
+    async function cargarProductos() {
+        const res = await fetch('/api/productos', { headers: { 'Authorization': 'Bearer ' + token } });
+        inventario = await res.json();
+        renderizarProductos(inventario);
+    }
+
+    // FIX: Renderizado adaptado a columnas de Bootstrap
+    function renderizarProductos(lista) {
+        const container = document.getElementById('listaProductos');
+        container.innerHTML = '';
+        lista.forEach(prod => {
+            if(prod.stock_actual > 0) {
+                // Creamos columnas col-6 (celular) col-lg-3 (PC)
+                container.innerHTML += `
+                    <div class="col-6 col-md-4 col-lg-3">
+                        <div class="product-card p-3 text-center" onclick="agregarAlCarrito(${prod.id})">
+                            <div class="fw-bold text-truncate" title="${prod.nombre}">${prod.nombre}</div>
+                            <div class="mt-2"><span class="price-badge">$${parseFloat(prod.precio_venta).toFixed(2)}</span></div>
+                            <small class="text-muted d-block mt-1">Stock: ${prod.stock_actual}</small>
+                        </div>
+                    </div>`;
+            }
+        });
+    }
+
+    function filtrarProductos() {
+        const txt = document.getElementById('buscador').value.toLowerCase();
+        renderizarProductos(inventario.filter(p => p.nombre.toLowerCase().includes(txt) || (p.codigo_barras && p.codigo_barras.includes(txt))));
+    }
+
+    function agregarEnvase(cod) {
+        const p = inventario.find(i => i.codigo_barras === cod);
+        if(p) agregarAlCarrito(p.id);
+        else alert("Producto " + cod + " no encontrado. Ejecuta el SQL de envases.");
+    }
+
+    function agregarAlCarrito(id) {
+        if(!cajaAbierta) return alert("¡Abre caja primero!");
+        const prod = inventario.find(p => p.id === id);
+        const item = carrito.find(i => i.id === id);
+        
+        if(item) {
+            if(item.cantidad < prod.stock_actual) item.cantidad++;
+            else return alert("Sin stock suficiente");
+        } else {
+            carrito.push({ id: prod.id, nombre: prod.nombre, precio: parseFloat(prod.precio_venta), cantidad: 1, max: prod.stock_actual });
+        }
+        actualizarCarrito();
+    }
+
+    function actualizarCarrito() {
+        const div = document.getElementById('listaCarrito');
+        const spanTotal = document.getElementById('totalVenta');
+        div.innerHTML = '';
+        let total = 0;
+        
+        if(carrito.length===0) div.innerHTML = '<div class="text-center text-muted mt-5"><i class="bi bi-cart-x" style="font-size: 2rem;"></i><p>Carrito vacío</p></div>';
+        
+        carrito.forEach((item, idx) => {
+            total += item.precio * item.cantidad;
+            div.innerHTML += `
+                <div class="cart-item">
+                    <div>
+                        <div class="fw-bold">${item.nombre}</div>
+                        <small>$${item.precio} x ${item.cantidad}</small>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-sm btn-light border" onclick="modCant(${idx}, -1)">-</button>
+                        <span>${item.cantidad}</span>
+                        <button class="btn btn-sm btn-light border" onclick="modCant(${idx}, 1)">+</button>
+                        <span class="fw-bold ms-2">$${(item.precio*item.cantidad).toFixed(2)}</span>
+                    </div>
+                </div>`;
+        });
+        spanTotal.textContent = total.toFixed(2);
+    }
+
+    function modCant(idx, delta) {
+        const item = carrito[idx];
+        const nueva = item.cantidad + delta;
+        if(nueva > 0 && nueva <= item.max) item.cantidad = nueva;
+        else if(nueva <= 0) carrito.splice(idx, 1);
+        actualizarCarrito();
+    }
+    function limpiarCarrito() { carrito = []; actualizarCarrito(); }
+
+    async function cobrar() {
+        const total = parseFloat(document.getElementById('totalVenta').textContent);
+        if(carrito.length === 0 || !confirm(`¿Cobrar $${total}?`)) return;
+        
+        const res = await fetch('/api/ventas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ carrito, total })
+        });
+        const data = await res.json();
+        if(res.ok) {
+            mostrarTicket(data.ticketId, total);
+            limpiarCarrito(); cargarProductos();
+        } else alert(data.error);
+    }
+
+    function mostrarTicket(id, total) {
+        document.getElementById('ticketId').textContent = id;
+        document.getElementById('fechaTicket').textContent = new Date().toLocaleString();
+        document.getElementById('ticketTotal').textContent = total.toFixed(2);
+        document.getElementById('ticketItems').innerHTML = carrito.map(i => `<div>${i.cantidad} x ${i.nombre} - $${(i.precio*i.cantidad).toFixed(2)}</div>`).join('');
+        document.getElementById('modalTicket').style.display = 'flex';
+    }
+
+    // CAJA
+    async function verificarCaja() {
+        const res = await fetch('/api/caja/estado', { headers: { 'Authorization': 'Bearer ' + token } });
+        const data = await res.json();
+        const badge = document.getElementById('estadoCajaBadge');
+        if(data.abierto) {
+            cajaAbierta = true; badge.textContent = "🟢 Caja Abierta"; badge.className = "badge bg-success";
+            document.getElementById('btnCorte').textContent = "Cerrar Turno";
+        } else {
+            cajaAbierta = false; badge.textContent = "🔴 Caja Cerrada"; badge.className = "badge bg-danger";
+            document.getElementById('btnCorte').textContent = "Abrir Turno";
+        }
+    }
+
+    async function gestionarCaja() {
+        if(cajaAbierta) {
+            const m = prompt("Cierre: Ingresa efectivo total en caja:");
+            if(!m) return;
+            const res = await fetch('/api/caja/cerrar', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ monto_final: parseFloat(m) })
+            });
+            const d = await res.json();
+            alert(res.ok ? `Corte correcto.\nDiferencia: $${d.resumen.diferencia}` : d.error);
+            if(res.ok) location.reload();
+        } else {
+            const m = prompt("Apertura: Fondo inicial:");
+            if(!m) return;
+            const res = await fetch('/api/caja/abrir', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ monto_inicial: parseFloat(m) })
+            });
+            if(res.ok) { alert("Caja Abierta"); location.reload(); }
+        }
+    }
+    function logout() { localStorage.removeItem('token'); window.location.href = '/index.html'; }
+</script>
+</body>
+</html>

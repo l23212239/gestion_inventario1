@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Modelorama</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body { background-color: #f8f9fa; }
+        .sidebar { min-height: 100vh; background: #212529; color: white; }
+        .sidebar a { color: #adb5bd; text-decoration: none; padding: 10px 15px; display: block; border-radius: 5px; transition: 0.3s; }
+        .sidebar a:hover, .sidebar a.active { background: #0d6efd; color: white; }
+        .stat-card { transition: transform 0.2s; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .stat-card:hover { transform: translateY(-5px); }
+        .table-container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        
+        /* Modales Personalizados */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-custom { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3); position: relative; }
+        .badge { font-size: 0.85em; }
+    </style>
+</head>
+<body>
+
+<div class="d-flex">
+    <div class="sidebar p-3 d-none d-md-block" style="width: 250px;">
+        <h4 class="mb-4 text-center"><i class="bi bi-shop"></i> Modelorama</h4>
+        <nav>
+            <a href="#" class="active mb-2"><i class="bi bi-box-seam"></i> Inventario</a>
+            <a href="/ventas.html" class="mb-2"><i class="bi bi-cart4"></i> Punto de Venta</a>
+            <button onclick="verHistorial()" class="btn btn-outline-secondary w-100 text-start border-0 text-white mb-2"><i class="bi bi-clock-history"></i> Historial</button>
+            <hr>
+            <div class="mt-auto">
+                <small class="text-muted" id="usuarioNombre">Usuario</small>
+                <button onclick="logout()" class="btn btn-danger btn-sm w-100 mt-2"><i class="bi bi-box-arrow-left"></i> Salir</button>
+            </div>
+        </nav>
+    </div>
+
+    <div class="container-fluid p-4">
+        <div class="d-md-none d-flex justify-content-between mb-3">
+            <h3>Modelorama</h3>
+            <a href="/ventas.html" class="btn btn-success">Ir a Caja</a>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-8 mb-3">
+                <div class="card stat-card h-100 p-3">
+                    <h5 class="card-title text-muted">📊 Ventas Semanales</h5>
+                    <div style="height: 200px;"><canvas id="graficaVentas"></canvas></div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card stat-card h-100 p-3">
+                    <h5 class="card-title text-muted">🏆 Top Productos</h5>
+                    <div style="height: 200px;"><canvas id="graficaTop"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h2 class="m-0">Inventario</h2>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" onclick="abrirModal()"><i class="bi bi-plus-lg"></i> Nuevo</button>
+                <button class="btn btn-success" onclick="triggerImportar()"><i class="bi bi-file-earmark-excel"></i> Importar</button>
+                <button class="btn btn-info text-white" onclick="exportarExcel()"><i class="bi bi-download"></i> Exportar</button>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mb-4">
+            <div class="input-group shadow-sm flex-grow-1">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                <input type="text" id="buscador" class="form-control border-start-0" placeholder="Buscar producto, categoría..." onkeyup="filtrarTabla()">
+            </div>
+            <select class="form-select w-auto shadow-sm" onchange="ordenarInventario(this.value)">
+                <option value="defecto" selected>Ordenar por...</option>
+                <option value="nombre_asc">🔤 Nombre (A-Z)</option>
+                <option value="nombre_desc">🔤 Nombre (Z-A)</option>
+                <option value="categoria">🏷️ Categoría</option>
+                <option value="stock_mayor">📦 Mayor Stock</option>
+                <option value="stock_menor">📦 Menor Stock</option>
+            </select>
+        </div>
+        
+        <input type="file" id="inputExcel" accept=".xlsx, .xls" style="display: none;" onchange="subirExcel()">
+
+        <div class="table-container table-responsive">
+            <table class="table table-hover align-middle" id="tablaProductos">
+                <thead class="table-light">
+                    <tr>
+                        <th>Producto</th>
+                        <th>Categorías</th>
+                        <th>Precio</th>
+                        <th>Stock</th>
+                        <th>Ubicación</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="modalProducto" class="modal-overlay">
+    <div class="modal-custom">
+        <h3 id="tituloModal" class="mb-3">Nuevo Producto</h3>
+        <form id="formProducto">
+            <input type="hidden" id="prodId">
+            <div class="row g-3">
+                <div class="col-12"><label class="form-label">Nombre</label><input type="text" id="nombre" class="form-control" required></div>
+                <div class="col-md-6"><label class="form-label">Código Barras</label><input type="text" id="codigo" class="form-control"></div>
+                <div class="col-md-6"><label class="form-label">Ubicación</label><input type="text" id="ubicacion" class="form-control"></div>
+                <div class="col-md-4"><label class="form-label">Costo ($)</label><input type="number" id="precioCompra" class="form-control" step="0.5"></div>
+                <div class="col-md-4"><label class="form-label fw-bold">Venta ($)</label><input type="number" id="precioVenta" class="form-control border-success" step="0.5" required></div>
+                <div class="col-md-4"><label class="form-label">Stock</label><input type="number" id="stock" class="form-control"></div>
+                <div class="col-12">
+                    <label class="form-label">Categorías</label>
+                    <div id="listaCategorias" class="border p-2 rounded bg-light text-dark" style="max-height: 100px; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr;"></div>
+                </div>
+            </div>
+            <div class="mt-4 text-end">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="modalHistorial" class="modal-overlay">
+    <div class="modal-custom" style="max-width: 800px;">
+        <h3>🕵️ Historial de Movimientos</h3>
+        <div style="max-height: 500px; overflow-y: auto;">
+            <table class="table table-sm table-striped">
+                <thead class="table-dark"><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
+                <tbody id="tablaHistorialBody"></tbody>
+            </table>
+        </div>
+        <div class="text-end mt-3"><button class="btn btn-secondary" onclick="document.getElementById('modalHistorial').style.display='none'">Cerrar</button></div>
+    </div>
+</div>
+
+<div id="modalDetalleDia" class="modal-overlay">
+    <div class="modal-custom" style="max-width: 400px;">
+        <h4 id="tituloDetalleDia">Ventas del Día</h4>
+        <div class="border rounded p-2 my-3" style="max-height: 300px; overflow-y: auto;">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Prod.</th><th class="text-center">Cant.</th><th class="text-end">Total</th></tr></thead>
+                <tbody id="listaDetalleDia"></tbody>
+            </table>
+        </div>
+        <div class="text-end"><button class="btn btn-danger btn-sm" onclick="document.getElementById('modalDetalleDia').style.display='none'">Cerrar</button></div>
+    </div>
+</div>
+
+<script>
+    const token = localStorage.getItem('token');
+const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+
+// 1. Si no hay token, al Login
+if (!token) {
+    window.location.href = '/index.html';
+} 
+// 2. Si hay token pero NO es admin, a la Caja
+else if (usuario.rol !== 'admin') {
+    window.location.href = '/ventas.html';
+}
+    document.getElementById('usuarioNombre').textContent = usuario.usuario || 'Admin';
+
+    let productosGlobal = [];
+    let chartVentasInstance = null;
+    let datosVentasRaw = [];
+
+    // === INICIO ===
+    cargarInventario();
+    cargarGraficas();
+
+    // 1. CARGAR INVENTARIO
+    async function cargarInventario() {
+        try {
+            const res = await fetch('/api/productos', { headers: { 'Authorization': 'Bearer ' + token } });
+            productosGlobal = await res.json();
+            dibujarTabla(productosGlobal);
+        } catch (error) { console.error("Error cargando inventario:", error); }
+    }
+
+    function dibujarTabla(lista) {
+        const tbody = document.querySelector('#tablaProductos tbody');
+        tbody.innerHTML = '';
+        if(lista.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay productos</td></tr>'; return; }
+
+        lista.forEach(prod => {
+            // FIX: Etiquetas azules (bg-primary)
+            const categorias = prod.categorias_nombres ? 
+                prod.categorias_nombres.split(',').map(c => `<span class="badge bg-primary me-1">${c.trim()}</span>`).join('') 
+                : '<span class="text-muted small">Sin cat.</span>';
+
+            const fila = `
+                <tr>
+                    <td><div class="fw-bold">${prod.nombre}</div><small class="text-muted">${prod.codigo_barras || ''}</small></td>
+                    <td>${categorias}</td>
+                    <td>$${parseFloat(prod.precio_venta).toFixed(2)}</td>
+                    <td class="${prod.stock_actual < 5 ? 'text-danger fw-bold' : ''}">${prod.stock_actual}</td>
+                    <td>${prod.ubicacion || '-'}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editarProducto(${prod.id})"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="confirmarEliminar(${prod.id}, '${prod.nombre}')"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>`;
+            tbody.innerHTML += fila;
+        });
+    }
+
+    // 2. BUSCADOR Y ORDEN
+    function filtrarTabla() {
+        const busqueda = document.getElementById('buscador').value.toLowerCase();
+        const filtrados = productosGlobal.filter(p => 
+            p.nombre.toLowerCase().includes(busqueda) || 
+            (p.categorias_nombres && p.categorias_nombres.toLowerCase().includes(busqueda)) ||
+            (p.ubicacion && p.ubicacion.toLowerCase().includes(busqueda))
+        );
+        dibujarTabla(filtrados);
+    }
+
+    function ordenarInventario(criterio) {
+        let lista = [...productosGlobal];
+        if(criterio === 'nombre_asc') lista.sort((a,b) => a.nombre.localeCompare(b.nombre));
+        if(criterio === 'nombre_desc') lista.sort((a,b) => b.nombre.localeCompare(a.nombre));
+        if(criterio === 'categoria') lista.sort((a,b) => (a.categorias_nombres||'').localeCompare(b.categorias_nombres||''));
+        if(criterio === 'stock_mayor') lista.sort((a,b) => b.stock_actual - a.stock_actual);
+        if(criterio === 'stock_menor') lista.sort((a,b) => a.stock_actual - b.stock_actual);
+        dibujarTabla(lista);
+    }
+
+    // 3. GRÁFICAS
+    async function cargarGraficas() {
+        await cargarGraficaVentas();
+        cargarGraficaTop();
+    }
+
+    async function cargarGraficaVentas() {
+        try {
+            const res = await fetch('/api/reportes/ventas-semanales', { headers: { 'Authorization': 'Bearer ' + token } });
+            datosVentasRaw = await res.json();
+            
+            const etiquetas = datosVentasRaw.map(d => {
+                if(!d.dia) return "";
+                const [anio, mes, dia] = d.dia.split('-');
+                return `${dia}/${mes}`;
+            });
+            const valores = datosVentasRaw.map(d => d.total);
+
+            const ctx = document.getElementById('graficaVentas').getContext('2d');
+            if (chartVentasInstance) chartVentasInstance.destroy();
+
+            chartVentasInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: etiquetas,
+                    datasets: [{
+                        label: 'Ventas ($)', data: valores,
+                        backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                        hoverBackgroundColor: 'rgba(220, 53, 69, 0.8)'
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    onHover: (e, el) => e.native.target.style.cursor = el[0] ? 'pointer' : 'default',
+                    onClick: (e, el) => { if(el.length > 0) abrirDetalleDia(datosVentasRaw[el[0].index].dia); },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    async function cargarGraficaTop() {
+        try {
+            const res = await fetch('/api/reportes/productos-top', { headers: { 'Authorization': 'Bearer ' + token } });
+            const datos = await res.json();
+            new Chart(document.getElementById('graficaTop'), {
+                type: 'doughnut',
+                data: {
+                    labels: datos.map(d => d.nombre),
+                    datasets: [{ data: datos.map(d => d.cantidad_total), backgroundColor: ['#ff6384','#36a2eb','#ffce56','#4bc0c0','#9966ff'] }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    // 4. MODALES Y ACCIONES
+    async function abrirDetalleDia(fecha) {
+        document.getElementById('modalDetalleDia').style.display = 'flex';
+        document.getElementById('tituloDetalleDia').textContent = `Ventas del ${fecha}`;
+        const tbody = document.getElementById('listaDetalleDia');
+        tbody.innerHTML = '<tr><td colspan="3">Cargando...</td></tr>';
+        
+        try {
+            const res = await fetch(`/api/reportes/detalle-dia/${fecha}`, { headers: { 'Authorization': 'Bearer ' + token } });
+            const items = await res.json();
+            tbody.innerHTML = '';
+            if(items.length===0) tbody.innerHTML = '<tr><td colspan="3">Sin ventas</td></tr>';
+            items.forEach(i => {
+                tbody.innerHTML += `<tr><td>${i.nombre}</td><td class="text-center">${i.cantidad_total}</td><td class="text-end">$${i.dinero_total}</td></tr>`;
+            });
+        } catch(e) { console.error(e); }
+    }
+
+    async function verHistorial() {
+        document.getElementById('modalHistorial').style.display = 'flex';
+        const tbody = document.getElementById('tablaHistorialBody');
+        tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+        try {
+            const res = await fetch('/api/historial', { headers: { 'Authorization': 'Bearer ' + token } });
+            const logs = await res.json();
+            tbody.innerHTML = '';
+            logs.forEach(log => {
+                let color = log.accion==='ELIMINAR'?'text-danger':(log.accion==='CREAR'?'text-success':'');
+                tbody.innerHTML += `<tr><td>${new Date(log.fecha).toLocaleString()}</td><td>${log.usuario}</td><td class="${color} fw-bold">${log.accion}</td><td>${log.detalle}</td></tr>`;
+            });
+        } catch(e) { console.error(e); }
+    }
+
+    const modalProd = document.getElementById('modalProducto');
+    const formProd = document.getElementById('formProducto');
+    let catsCargadas = false;
+
+    async function abrirModal() {
+        modalProd.style.display = 'flex';
+        document.getElementById('tituloModal').textContent = "Nuevo Producto";
+        document.getElementById('prodId').value = "";
+        formProd.reset();
+        if(!catsCargadas) await cargarCats();
+    }
+    
+    function cerrarModal() { modalProd.style.display = 'none'; }
+
+    async function cargarCats() {
+        const res = await fetch('/api/categorias', { headers: { 'Authorization': 'Bearer ' + token } });
+        const cats = await res.json();
+        const div = document.getElementById('listaCategorias');
+        div.innerHTML = '';
+        cats.forEach(c => {
+            div.innerHTML += `<div><input type="checkbox" name="cats" value="${c.id}" id="c${c.id}"> <label for="c${c.id}">${c.nombre}</label></div>`;
+        });
+        catsCargadas = true;
+    }
+
+    formProd.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('prodId').value;
+        const checked = Array.from(document.querySelectorAll('input[name="cats"]:checked')).map(cb => cb.value);
+        const data = {
+            nombre: document.getElementById('nombre').value,
+            codigo_barras: document.getElementById('codigo').value,
+            ubicacion: document.getElementById('ubicacion').value,
+            precio_compra: document.getElementById('precioCompra').value,
+            precio_venta: document.getElementById('precioVenta').value,
+            stock_actual: document.getElementById('stock').value,
+            categorias: checked
+        };
+        
+        await fetch(id ? `/api/productos/${id}` : '/api/productos', {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify(data)
+        });
+        cerrarModal(); cargarInventario(); alert("Guardado");
+    });
+
+    async function editarProducto(id) {
+        await abrirModal();
+        document.getElementById('tituloModal').textContent = "Editar Producto";
+        document.getElementById('prodId').value = id;
+        const res = await fetch(`/api/productos/${id}`, { headers: { 'Authorization': 'Bearer ' + token } });
+        const prod = await res.json();
+        
+        document.getElementById('nombre').value = prod.nombre;
+        document.getElementById('codigo').value = prod.codigo_barras;
+        document.getElementById('ubicacion').value = prod.ubicacion;
+        document.getElementById('precioCompra').value = prod.precio_compra;
+        document.getElementById('precioVenta').value = prod.precio_venta;
+        document.getElementById('stock').value = prod.stock_actual;
+        
+        if(prod.categorias_ids) prod.categorias_ids.forEach(cid => {
+             const ck = document.getElementById(`c${cid}`); if(ck) ck.checked = true;
+        });
+    }
+
+    async function confirmarEliminar(id, nombre) {
+        if(confirm(`¿Eliminar ${nombre}?`)) {
+            await fetch(`/api/productos/${id}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+            cargarInventario();
+        }
+    }
+
+    // EXCEL
+    function triggerImportar() { document.getElementById('inputExcel').click(); }
+    function exportarExcel() { window.location.href = '/api/exportar'; }
+    async function subirExcel() {
+        const file = document.getElementById('inputExcel').files[0];
+        if(!file) return;
+        const fd = new FormData(); fd.append('archivoExcel', file);
+        alert("Procesando...");
+        await fetch('/api/importar', { method: 'POST', body: fd });
+        cargarInventario(); alert("Importado"); document.getElementById('inputExcel').value = '';
+    }
+
+    function logout() { localStorage.removeItem('token'); window.location.href = '/index.html'; }
+</script>
+</body>
+</html>

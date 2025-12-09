@@ -4,43 +4,100 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registro - Modelorama</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
     <style>
-        body { font-family: Arial, sans-serif; display: flex; justify-content: center; padding-top: 50px; }
-        form { background: #f4f4f4; padding: 20px; border-radius: 8px; width: 300px; }
-        input, select, button { width: 100%; margin-bottom: 10px; padding: 10px; box-sizing: border-box; }
-        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        .mensaje { color: red; text-align: center; font-size: 0.9em; }
+        body {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            width: 100%;
+            max-width: 450px; 
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .card-header { background: transparent; border-bottom: none; text-align: center; padding-top: 25px; }
+        .input-group-text { background-color: #f8f9fa; border-right: none; }
+        .form-control, .form-select { border-left: none; }
+        .form-control:focus, .form-select:focus { box-shadow: none; border-color: #0d6efd; }
     </style>
 </head>
 <body>
 
-    <form id="formRegistro">
-        <h2 style="text-align: center;">Crear Usuario</h2>
-        
-        <input type="text" id="nombre" placeholder="Nombre completo" required>
-        <input type="email" id="email" placeholder="Correo electrónico" required>
-        <input type="password" id="password" placeholder="Contraseña" required>
-        
-        <label for="rol">Tipo de Usuario:</label>
-        <select id="rol">
-            <option value="cliente">Cliente</option>
+    <div class="card login-card p-3">
+        <div class="card-header">
+            <h3 class="fw-bold text-dark">Crear Cuenta</h3>
+            <p class="text-muted small">Únete al equipo</p>
+        </div>
+        <div class="card-body">
+            <form id="registroForm">
+                <div id="mensaje" class="alert d-none text-center p-2 small" role="alert"></div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small">Nombre Completo</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <input type="text" id="nombre" class="form-control" placeholder="Tu Nombre" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small">Correo Electrónico</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                        <input type="email" id="email" class="form-control" placeholder="correo@ejemplo.com" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-secondary small">Contraseña</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <input type="password" id="password" class="form-control" placeholder="Mínimo 6 caracteres" required>
+                    </div>
+                </div>
+
+               <div class="mb-4">
+    <label class="form-label text-secondary small">Rol</label>
+    <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-person-gear"></i></span>
+        <select id="rol" class="form-select">
+            <option value="cliente">Cliente </option>
+            <option value="empleado">Empleado </option>
             <option value="admin">Administrador</option>
         </select>
+    </div>
+</div>
 
-        <button type="submit">Registrar</button>
-        <p class="mensaje" id="mensaje"></p>
-    </form>
+                <button type="submit" class="btn btn-success w-100 py-2 fw-bold shadow-sm">
+                    Registrarme <i class="bi bi-check-lg ms-1"></i>
+                </button>
+            </form>
+        </div>
+        <div class="card-footer text-center bg-white border-0 pb-3">
+            <small class="text-muted">¿Ya tienes cuenta? <a href="/index.html" class="text-decoration-none fw-bold">Inicia Sesión</a></small>
+        </div>
+    </div>
 
     <script>
-        const form = document.getElementById('formRegistro');
+        const form = document.getElementById('registroForm');
         const mensajeDiv = document.getElementById('mensaje');
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            const btn = form.querySelector('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
+            btn.disabled = true;
 
-            // Recoger datos
-            const usuario = {
+            const datos = {
                 nombre: document.getElementById('nombre').value,
                 email: document.getElementById('email').value,
                 password: document.getElementById('password').value,
@@ -48,28 +105,33 @@
             };
 
             try {
-                const respuesta = await fetch('/api/registro', {
+                const res = await fetch('/api/registro', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(usuario)
+                    body: JSON.stringify(datos)
                 });
 
-                const datos = await respuesta.json();
+                const data = await res.json();
 
-                if (respuesta.ok) {
-                    mensajeDiv.style.color = 'green';
-                    mensajeDiv.textContent = '¡Registro exitoso! Redirigiendo...';
-                    setTimeout(() => {
-                        window.location.href = '/index.html'; // O a donde quieras mandarlos
-                    }, 2000);
+                if (res.ok) {
+                    mensajeDiv.className = 'alert alert-success text-center p-2 small';
+                    mensajeDiv.textContent = "¡Registro exitoso! Redirigiendo...";
+                    mensajeDiv.classList.remove('d-none');
+                    
+                    setTimeout(() => window.location.href = '/index.html', 1500);
                 } else {
-                    mensajeDiv.style.color = 'red';
-                    mensajeDiv.textContent = datos.error;
+                    mensajeDiv.className = 'alert alert-danger text-center p-2 small';
+                    mensajeDiv.textContent = data.error || "Error al registrar";
+                    mensajeDiv.classList.remove('d-none');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
                 }
-
             } catch (error) {
-                console.error(error);
-                mensajeDiv.textContent = 'Error de conexión';
+                mensajeDiv.className = 'alert alert-danger text-center p-2 small';
+                mensajeDiv.textContent = "Error de conexión";
+                mensajeDiv.classList.remove('d-none');
+                btn.innerHTML = originalText;
+                btn.disabled = false;
             }
         });
     </script>
