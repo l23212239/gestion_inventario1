@@ -211,6 +211,34 @@
             } catch (e) { alert("Error de conexión"); }
         }
 
+// En ventas.html
+function renderizarProductos(lista) {
+    const container = document.getElementById('listaProductos');
+    container.innerHTML = '';
+    
+    lista.forEach(prod => {
+        if(prod.stock_actual > 0) {
+            // Si tiene imagen usa la suya, si no, una genérica
+            const imagen = prod.imagen ? `/uploads/${prod.imagen}` : 'https://via.placeholder.com/150?text=Sin+Foto';
+            
+            container.innerHTML += `
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="product-card p-0 text-center h-100 overflow-hidden" onclick="agregarAlCarrito(${prod.id})">
+                        <div style="height: 120px; overflow: hidden;">
+                            <img src="${imagen}" class="w-100 h-100 object-fit-cover">
+                        </div>
+                        
+                        <div class="p-2">
+                            <div class="fw-bold text-truncate small" title="${prod.nombre}">${prod.nombre}</div>
+                            <div class="mt-1"><span class="price-badge">$${parseFloat(prod.precio_venta).toFixed(2)}</span></div>
+                            <small class="text-muted d-block" style="font-size:0.75rem">Stock: ${prod.stock_actual}</small>
+                        </div>
+                    </div>
+                </div>`;
+        }
+    });
+}
+
         function logout() { localStorage.removeItem('token'); window.location.href = '/index.html'; }
     </script>
 </body>
